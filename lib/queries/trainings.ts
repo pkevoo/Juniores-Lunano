@@ -1,6 +1,9 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { startOfDay } from 'date-fns';
 import { supabase } from '../supabase';
+import type { Database } from '../../types/database';
+
+type TrainingInsert = Database['public']['Tables']['trainings']['Insert'];
 
 export function useTrainings() {
   return useQuery({
@@ -25,4 +28,26 @@ export function useNextTraining() {
   const nextTraining =
     trainings?.find((t) => startOfDay(new Date(t.training_date)) >= today) ?? null;
   return { nextTraining, ...rest };
+}
+
+export function useAddTraining() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (training: TrainingInsert) => {
+      const { error } = await supabase.from('trainings').insert(training);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['trainings'] }),
+  });
+}
+
+export function useDeleteTraining() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: number) => {
+      const { error } = await supabase.from('trainings').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['trainings'] }),
+  });
 }
