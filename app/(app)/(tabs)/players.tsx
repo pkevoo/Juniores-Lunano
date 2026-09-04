@@ -9,7 +9,9 @@ import { XmlImportPanel } from '../../../components/shared/XmlImportPanel';
 import { useAuth } from '../../../lib/AuthContext';
 import { ageFromBirthdate } from '../../../lib/dateUtils';
 import { roleDef } from '../../../lib/permissions';
+import { useAllAttendance, presencePct } from '../../../lib/queries/attendance';
 import { useAddPlayer, useBulkImportPlayers, useDeletePlayer, usePlayers } from '../../../lib/queries/players';
+import { useTrainings } from '../../../lib/queries/trainings';
 import { POS_TAG } from '../../../lib/theme';
 import { useTheme } from '../../../lib/ThemeContext';
 import type { Position } from '../../../types/database';
@@ -46,6 +48,8 @@ export default function PlayersScreen() {
   const { profile } = useAuth();
   const def = roleDef(profile?.role);
   const { data: players } = usePlayers();
+  const { data: trainings } = useTrainings();
+  const { data: attendance } = useAllAttendance();
   const addPlayer = useAddPlayer();
   const bulkImport = useBulkImportPlayers();
   const deletePlayer = useDeletePlayer();
@@ -145,6 +149,44 @@ export default function PlayersScreen() {
                       <Text style={[styles.statLabel, { color: palette.ink50 }]}>Minuti</Text>
                     </View>
                   </View>
+
+                  {(() => {
+                    const playerRecords = (attendance ?? [])
+                      .filter((a) => a.player_id === p.id)
+                      .map((a) => ({ ...a, training: trainings?.find((t) => t.id === a.training_id) }))
+                      .filter((a) => a.training)
+                      .sort((a, b) => a.training!.training_date.localeCompare(b.training!.training_date))
+                      .slice(-8);
+                    const pct = presencePct(playerRecords);
+                    return (
+                      <>
+                        <Text style={[styles.sectionLabel, { color: palette.ink45 }]}>
+                          Presenza allenamenti {pct != null ? `· ${pct}%` : ''}
+                        </Text>
+                        {playerRecords.length > 0 ? (
+                          <View style={styles.attendanceBars}>
+                            {playerRecords.map((r) => (
+                              <View key={`${r.training_id}`} style={styles.attendanceBarSlot}>
+                                <View
+                                  style={[
+                                    styles.attendanceBarFill,
+                                    {
+                                      height: r.status === 'present' ? '100%' : '18%',
+                                      backgroundColor: r.status === 'present' ? palette.accent : palette.danger,
+                                    },
+                                  ]}
+                                />
+                              </View>
+                            ))}
+                          </View>
+                        ) : (
+                          <Text style={{ fontSize: 11.5, color: palette.ink50, marginBottom: 14, fontFamily: 'Manrope_500Medium' }}>
+                            Nessuna presenza registrata ancora.
+                          </Text>
+                        )}
+                      </>
+                    );
+                  })()}
 
                   <Text style={[styles.sectionLabel, { color: palette.ink45 }]}>Confronto con il reparto</Text>
                   <View style={{ gap: 10, marginBottom: 4 }}>
@@ -262,6 +304,9 @@ const styles = StyleSheet.create({
   statValue: { fontSize: 17, fontFamily: 'Manrope_800ExtraBold' },
   statLabel: { fontSize: 9.5, marginTop: 2, fontFamily: 'Manrope_500Medium' },
   sectionLabel: { fontSize: 10, letterSpacing: 1, textTransform: 'uppercase', fontFamily: 'Manrope_700Bold', marginBottom: 8 },
+  attendanceBars: { flexDirection: 'row', alignItems: 'flex-end', gap: 5, height: 44, marginBottom: 18 },
+  attendanceBarSlot: { flex: 1, height: '100%', justifyContent: 'flex-end' },
+  attendanceBarFill: { width: '100%', borderRadius: 3, minHeight: 4 },
   compareLabelRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
   barTrack: { height: 6, borderRadius: 4, overflow: 'hidden' },
   barFill: { height: '100%', borderRadius: 4 },
